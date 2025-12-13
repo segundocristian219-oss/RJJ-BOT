@@ -200,14 +200,31 @@ const prefixes = Array.isArray(global.prefix)
 const isCommand =
   typeof m.text === 'string' &&
   prefixes.some(p => typeof p === 'string' && m.text.startsWith(p))
+
 for (const name in global.plugins) {
-const plugin = global.plugins[name]
-if (!plugin) continue
-if (plugin.disabled) continue
-if (!isCommand && typeof plugin.all !== "function") continue
-if (typeof plugin.all === "function") {
-try {
-await plugin.all.call(this, m, {
+  const plugin = global.plugins[name]
+  if (!plugin) continue
+  if (plugin.disabled) continue
+
+  // 🔥 optimización correcta
+  if (!isCommand && typeof plugin.all !== "function") continue
+
+  if (typeof plugin.all === "function") {
+    try {
+      await plugin.all.call(this, m, {
+        chatUpdate,
+        __filename: name,   // 👈 importante para sub-carpetas
+        user,
+        chat,
+        settings
+      })
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  // 👇 desde aquí sigue tu lógica normal de comandos
+}
 chatUpdate,
 __dirname: ___dirname,
 __filename,
