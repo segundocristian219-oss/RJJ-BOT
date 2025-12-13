@@ -1,51 +1,37 @@
-import fs from 'fs'
-import path from 'path'
+let handler = async (m, { conn, text }) => {
+  if (!text) 
+    return conn.sendMessage(
+      m.chat,
+      { text: `*𝖰𝗎𝖾 𝖭𝗈𝗆𝖻𝗋𝖾 𝖣𝖾𝗌𝖾𝖺𝗌 𝖯𝗈𝗇𝖾𝗋𝗆𝖾*`, ...global.rcanal },
+      { quoted: m }
+    )
 
-export async function before(m, { conn }) {
   try {
+    await conn.sendMessage(m.chat, { react: { text: '✏️', key: m.key } })
 
-    let nombreBot = global.namebot || '𝖠𝗇𝗀𝖾𝗅 𝖡𝗈𝗍'
-    let bannerFinal = 'https://cdn.russellxz.click/88dd19a7.jpeg'
+    await conn.updateProfileName(text)
 
+    return conn.sendMessage(
+      m.chat,
+      { text: '*𝖭𝗈𝗆𝖻𝗋𝖾 𝖢𝖺𝗆𝖻𝗂𝖺𝖽𝗈 𝖤𝗑𝗂𝗍𝗈𝗌𝖺𝗆𝖾𝗇𝗍𝖾*', ...global.rcanal },
+      { quoted: m }
+    )
 
-    const botActual = conn.user?.jid?.split('@')[0].replace(/\D/g, '')
-    const configPath = path.join('./𝖠𝗇𝗀𝖾𝗅𝖻𝗈𝗍𝗌', botActual, 'config.json')
-
-    if (fs.existsSync(configPath)) {
-      try {
-        const config = JSON.parse(fs.readFileSync(configPath))
-        if (config.name) nombreBot = config.name
-        if (config.banner) bannerFinal = config.banner
-      } catch (err) {
-        console.log('⚠️ No se pudo leer config del subbot en rcanal:', err)
-      }
-    }
-
-
-    const canales = [global.idcanal, global.idcanal2]
-    const newsletterJidRandom = canales[Math.floor(Math.random() * canales.length)]
-
-
-    global.rcanal = {
-      contextInfo: {
-        isForwarded: true,
-        forwardingScore: 1,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: newsletterJidRandom,
-          serverMessageId: 100,
-          newsletterName: global.namecanal,
-        },
-        externalAdReply: {
-          title: nombreBot,
-          body: global.author,
-          thumbnailUrl: bannerFinal,
-          sourceUrl: null,
-          mediaType: 1,
-          renderLargerThumbnail: false
-        }
-      }
-    }
   } catch (e) {
-    console.log('Error al generar rcanal:', e)
+    console.log(e)
+
+    await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } })
+
+    return conn.sendMessage(
+      m.chat,
+      { text: '*𝖠𝗁 𝖮𝖼𝗎𝗋𝗋𝗂𝖽𝗈 𝖴𝗇 𝖤𝗋𝗋𝗈𝗋 𝖨𝗇𝖾𝗌𝗉𝖾𝗋𝖺𝖽𝗈*', ...global.rcanal },
+      { quoted: m }
+    )
   }
 }
+
+handler.help = ['𝖲𝖾𝗍𝗇𝖺𝗆𝖾𝖻𝗈𝗍 <𝖳𝖾𝗑𝗍𝗈>']
+handler.tags = ['𝖮𝖶𝖭𝖤𝖱']
+handler.command = /^(nombrebot|setnamebot|cambianombre)$/i
+handler.owner = true
+export default handler
