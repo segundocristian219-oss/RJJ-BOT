@@ -207,7 +207,7 @@ for (const name in global.plugins) {
 
   if (!isCommand && typeof plugin.all !== "function") continue
 
-  const __filename = name
+  const __filename = name {
 const plugin = global.plugins[name]
 if (!plugin) continue
 if (plugin.disabled) continue
