@@ -21,13 +21,14 @@ const shorteners = [
 ]
 
 export async function before(m, { conn, isAdmin, isBotAdmin }) {
-  if (!m || m.fromMe || m.isBaileys) return true
+  if (!m) return true
+  if (m.fromMe || m.isBaileys) return true
   if (m.key?.fromMe) return true
   if (m.sender === conn.user?.jid) return true
-  if (!m.isGroup) return false
+  if (!m.isGroup) return true
 
   const chat = global.db.data.chats[m.chat]
-  if (!chat?.antiLink) return true
+  if (!chat || !chat.antiLink) return true
   if (isAdmin) return true
   if (!isBotAdmin) return true
 
@@ -40,25 +41,23 @@ export async function before(m, { conn, isAdmin, isBotAdmin }) {
   if (!links && !hasChannelLink) return true
 
   global.db.data.users[m.sender] ||= {}
-  global.db.data.users[m.sender].antiLinkWarns ||= {}
+  global.db.data.users[m.sender].antiLink ||= {}
+  global.db.data.users[m.sender].antiLink[m.chat] ||= 0
 
-  const warns = global.db.data.users[m.sender].antiLinkWarns
-  warns[m.chat] ||= 0
+  let blocked = false
 
   try {
-    const inviteCode = await conn.groupInviteCode(m.chat)
-    const groupLink = `https://chat.whatsapp.com/${inviteCode}`.toLowerCase()
-
-    let blocked = false
+    const invite = await conn.groupInviteCode(m.chat)
+    const groupLink = `https://chat.whatsapp.com/${invite}`.toLowerCase()
 
     if (hasChannelLink) blocked = true
 
     if (links) {
       for (const link of links) {
-        const lower = link.toLowerCase()
-        if (lower.includes(groupLink)) continue
-        if (allowedDomains.some(d => lower.includes(d))) continue
-        if (shorteners.some(s => lower.includes(s)) || !allowedDomains.some(d => lower.includes(d))) {
+        const l = link.toLowerCase()
+        if (l.includes(groupLink)) continue
+        if (allowedDomains.some(d => l.includes(d))) continue
+        if (shorteners.some(s => l.includes(s)) || !allowedDomains.some(d => l.includes(d))) {
           blocked = true
           break
         }
@@ -67,28 +66,28 @@ export async function before(m, { conn, isAdmin, isBotAdmin }) {
 
     if (!blocked) return true
 
-    warns[m.chat] += 1
+    global.db.data.users[m.sender].antiLink[m.chat]++
 
     await conn.sendMessage(m.chat, { delete: m.key }).catch(() => {})
 
-    if (warns[m.chat] >= 3) {
+    const warns = global.db.data.users[m.sender].antiLink[m.chat]
+
+    if (warns >= 3) {
       await conn.sendMessage(
         m.chat,
         {
-          text: `🚫 @${m.sender.split('@')[0]} superó el límite de links (3/3)\n👢 Expulsado del grupo`,
+          text: `🚫 @${m.sender.split('@')[0]} alcanzó 3/3 links\n👢 Expulsado`,
           mentions: [m.sender]
         }
       ).catch(() => {})
 
       await conn.groupParticipantsUpdate(m.chat, [m.sender], 'remove').catch(() => {})
-      warns[m.chat] = 0
+      global.db.data.users[m.sender].antiLink[m.chat] = 0
     } else {
       await conn.sendMessage(
         m.chat,
         {
-          text:
-            `⚠️ @${m.sender.split('@')[0]} no se permiten links\n` +
-            `Advertencia ${warns[m.chat]}/3`,
+          text: `⚠️ @${m.sender.split('@')[0]} link no permitido\nAdvertencia ${warns}/3`,
           mentions: [m.sender]
         },
         { quoted: m }
@@ -117,16 +116,9 @@ let handler = async (m, { isAdmin, isOwner }) => {
     chat.antiLink = false
     return m.reply('❌ AntiLink desactivado')
   }
-
-  return m.reply(
-    '⚙️ AntiLink\n\n' +
-    '.on antilink\n' +
-    '.off antilink'
-  )
 }
 
-handler.customPrefix = /^\.on antilink$|^\.off antilink$/i
-handler.command = new RegExp()
+handler.command = /^\.on antilink$|^\.off antilink$/i
 handler.group = true
 handler.admin = true
 
