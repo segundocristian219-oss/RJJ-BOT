@@ -30,7 +30,18 @@ export async function handler(chatUpdate) {
     if (!m) return
     m.exp = 0
 
-    // ───── Usuario ─────
+    if (m.msg?.contextInfo?.quotedMessage) {
+      m.quoted = m.quoted || smsg(this, {
+        key: {
+          remoteJid: m.chat,
+          fromMe: false,
+          id: m.msg.contextInfo.stanzaId,
+          participant: m.msg.contextInfo.participant
+        },
+        message: m.msg.contextInfo.quotedMessage
+      })
+    }
+
     let user = global.db.data.users[m.sender]
     if (!user) {
       user = global.db.data.users[m.sender] = {
@@ -47,11 +58,8 @@ export async function handler(chatUpdate) {
       }
     }
 
-    if (m.pushName && m.pushName !== user.name) {
-      user.name = m.pushName
-    }
+    if (m.pushName && m.pushName !== user.name) user.name = m.pushName
 
-    // ───── Chat ─────
     let chat = global.db.data.chats[m.chat]
     if (!chat) {
       chat = global.db.data.chats[m.chat] = {
@@ -68,7 +76,6 @@ export async function handler(chatUpdate) {
       }
     }
 
-    // ───── Settings ─────
     let settings = global.db.data.settings[this.user.jid]
     if (!settings) {
       settings = global.db.data.settings[this.user.jid] = {
@@ -80,10 +87,7 @@ export async function handler(chatUpdate) {
       }
     }
 
-    const isROwner = [...global.owner]
-      .map(v => v.replace(/\D/g, "") + "@lid")
-      .includes(m.sender)
-
+    const isROwner = [...global.owner].map(v => v.replace(/\D/g, "") + "@lid").includes(m.sender)
     const isOwner = isROwner || m.fromMe
     const isPrems = isROwner || user.premium
 
@@ -102,7 +106,7 @@ export async function handler(chatUpdate) {
         global.groupCache ||= new Map()
         const cached = global.groupCache.get(m.chat)
 
-        if (cached && Date.now() - cached.time < 60_000) {
+        if (cached && Date.now() - cached.time < 60000) {
           groupMetadata = cached.data
         } else {
           groupMetadata = await this.groupMetadata(m.chat)
@@ -122,11 +126,10 @@ export async function handler(chatUpdate) {
         isAdmin = isRAdmin || userP?.admin === "admin"
         isBotAdmin = botP?.admin === "admin" || botP?.admin === "superadmin"
       } catch (e) {
-        console.error("Group error:", e)
+        console.error(e)
       }
     }
 
-    // ───── Plugins ALL ─────
     const __dirname = join(path.dirname(fileURLToPath(import.meta.url)), "plugins")
 
     for (const name in global.plugins) {
@@ -147,7 +150,6 @@ export async function handler(chatUpdate) {
       }
     }
 
-    // ───── Plugins COMMAND ─────
     for (const name in global.plugins) {
       const plugin = global.plugins[name]
       if (!plugin || plugin.disabled || typeof plugin !== "function") continue
@@ -160,14 +162,14 @@ export async function handler(chatUpdate) {
       const match = plugin._prefixRegex.exec(m.text)
       if (!match) continue
 
-      let [cmd, ...args] = m.text.slice(match[0].length).trim().split(/\s+/)
-      cmd = (cmd || "").toLowerCase()
+      let [command, ...args] = m.text.slice(match[0].length).trim().split(/\s+/)
+      command = (command || "").toLowerCase()
 
       const isAccept = plugin.command instanceof RegExp
-        ? plugin.command.test(cmd)
+        ? plugin.command.test(command)
         : Array.isArray(plugin.command)
-        ? plugin.command.includes(cmd)
-        : plugin.command === cmd
+        ? plugin.command.includes(command)
+        : plugin.command === command
 
       if (!isAccept) continue
 
@@ -185,7 +187,7 @@ export async function handler(chatUpdate) {
 
       try {
         await plugin.call(this, m, {
-          command: cmd,
+          command,
           args,
           text: args.join(" "),
           conn: this,
@@ -197,7 +199,8 @@ export async function handler(chatUpdate) {
           isPrems,
           user,
           chat,
-          settings
+          settings,
+          quoted: m.quoted
         })
       } catch (e) {
         console.error(e)
@@ -214,28 +217,15 @@ export async function handler(chatUpdate) {
 
 global.dfail = (type, m, conn) => {
   const msg = {
-    rowner: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖯𝗎𝖾𝖽𝖾 𝖲𝖾𝗋 𝖴𝗌𝖺𝖽𝗈 𝖯𝗈𝗋 𝖬𝗂 𝖢𝗋𝖾𝖺𝖽𝗈𝗋*`,
+    owner: "*Este comando solo puede usarlo mi creador*",
+    premium: "*Este comando es solo para usuarios premium*",
+    group: "*Este comando solo funciona en grupos*",
+    private: "*Este comando solo se usa en privado*",
+    admin: "*Este comando es solo para admins*",
+    botAdmin: "*Necesito ser admin para usar este comando*"
+  }[type]
 
-owner: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝖽𝗈 𝖲𝗈𝗅𝗈 𝖯𝗎𝖾𝖽𝖾 𝖲𝖾𝗋 𝖴𝗍𝗂𝗅𝗂𝗓𝖺𝖽𝗈 𝖯𝗈𝗋 𝖬𝗂 𝖢𝗋𝖾𝖺𝖽𝗈𝗋*`,
-
-mods: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖯𝗎𝖾𝖽𝖾 𝖲𝖾𝗋 𝖴𝗍𝗂𝗅𝗂𝗓𝖺𝖽𝗈 𝖯𝗈𝗋 𝖽𝖾𝗌𝖺𝗋𝗋𝗈𝗅𝗅𝖺𝖽𝗈𝗋𝖾𝗌 𝖮𝖿𝗂𝖼𝗂𝖺𝗅𝖾𝗌*`,
-
-premium: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖫𝗈 𝖯𝗎𝖾𝖽𝖾𝗇 𝖴𝗍𝗂𝗅𝗂𝗓𝖺𝗋 𝖴𝗌𝗎𝖺𝗋𝗂𝗈𝗌 𝖯𝗋𝖾𝗆𝗂𝗎𝗆*`,
-
-group: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖥𝗎𝗇𝖼𝗂𝗈𝗇𝖺 𝖤𝗇 𝖦𝗋𝗎𝗉𝗈𝗌*`,
-
-private: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖲𝖾 𝖯𝗎𝖾𝖽𝖾 𝖮𝖼𝗎𝗉𝖺𝗋 𝖤𝗇 𝖤𝗅 𝖯𝗋𝗂𝗏𝖺𝖽𝗈 𝖣𝖾𝗅 𝖡𝗈𝗍*`,
-
-admin: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖯𝗎𝖾𝖽𝖾 𝖲𝖾𝗋 𝖴𝗌𝖺𝖽𝗈 𝖯𝗈𝗋 𝖠𝖽𝗆𝗂𝗇𝗂𝗌𝗍𝗋𝖺𝖽𝗈𝗋𝖾𝗌*`,
-
-botAdmin: `*𝖭𝖾𝖼𝖾𝗌𝗂𝗍𝗈 𝗌𝖾𝗋 𝖠𝖽𝗆𝗂𝗇 𝖯𝖺𝗋𝖺 𝖴𝗌𝖺𝗋 𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈*`,
-
-unreg: `*𝖭𝗈 𝖤𝗌𝗍𝖺𝗌 𝖱𝖾𝗀𝗂𝗌𝗍𝗋𝖺𝖽𝗈, 𝖴𝗌𝖺 .𝗋𝖾𝗀 (𝗇𝖺𝗆𝖾) 19*`,
-
-restrict: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖠𝗁 𝖲𝗂𝖽𝗈 𝖣𝖾𝗌𝖺𝖻𝗂𝗅𝗂𝗍𝖺𝖽𝗈 𝖯𝗈𝗋 𝖬𝗂 𝖢𝗋𝖾𝖺𝖽𝗈𝗋*`
-
-}[type]
-if (msg) return conn.reply(m.chat, msg, m, rcanal).then(_ => m.react('✖️'))
+  if (msg) conn.reply(m.chat, msg, m).then(() => m.react("✖️"))
 }
 
 const file = fileURLToPath(import.meta.url)
