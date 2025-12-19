@@ -39,15 +39,19 @@ export async function handler(chatUpdate) {
   if (global.processedMessages.has(msgId)) return
 
   global.processedMessages.add(msgId)
-  if (global.processedMessages.size > 5000) global.processedMessages.clear()
   setTimeout(() => global.processedMessages.delete(msgId), 60000)
 
   if (global.db.data == null) await global.loadDatabase()
 
   m = smsg(this, m) || m
   if (!m) return
-
   if (typeof m.text !== "string") m.text = ""
+
+  /* ========= PREFIX / COMMAND ========= */
+  const prefixes = Array.isArray(global.prefix) ? global.prefix : [global.prefix]
+  const isCommand =
+    typeof m.text === "string" &&
+    prefixes.some(p => typeof p === "string" && m.text.startsWith(p))
 
   /* ========= DB ========= */
   const users = global.db.data.users
@@ -95,17 +99,9 @@ export async function handler(chatUpdate) {
   const isOwners = isOwner || m.sender === this.user.jid
 
   if (settings.self && !isOwners) return
-
-  if (
-    settings.gponly &&
-    !isOwners &&
-    !m.chat.endsWith("g.us") &&
-    !/code|p|ping|qr|estado|status|infobot|botinfo|report|reportar|invite|join|logout|suggest|help|menu/gim.test(m.text)
-  ) return
-
   if (m.isBaileys) return
 
-  /* ========= GRUPOS (MEJORA SPEED) ========= */
+  /* ========= GRUPOS (ULTRA OPTIMIZADO) ========= */
   let groupMetadata = {}
   let participants = []
   let isAdmin = false
@@ -114,27 +110,28 @@ export async function handler(chatUpdate) {
   let userGroup = {}
   let botGroup = {}
 
-  if (m.isGroup) {
-    const cached = global.groupCache.get(m.chat)
-    const needsGroup =
-      [...Object.values(global.plugins)].some(p => p?.admin || p?.botAdmin || p?.group || p?.detect)
+  const needsGroup =
+    m.isGroup &&
+    [...Object.values(global.plugins)].some(p =>
+      p?.group || p?.admin || p?.botAdmin || p?.detect
+    )
 
+  if (needsGroup) {
+    const cached = global.groupCache.get(m.chat)
     if (cached && Date.now() - cached.time < 60000) {
       groupMetadata = cached.data
-    } else if (needsGroup) {
+    } else {
       groupMetadata = await this.groupMetadata(m.chat)
       global.groupCache.set(m.chat, { data: groupMetadata, time: Date.now() })
-      if (global.groupCache.size > 200)
-        global.groupCache.delete(global.groupCache.keys().next().value)
     }
 
     participants = groupMetadata.participants || []
     userGroup = participants.find(p => p.id === m.sender) || {}
     botGroup = participants.find(p => p.id === this.user.jid) || {}
 
-    // MEJORA SPEED: Cache admins por usuario
     const adminKey = m.chat + ":" + m.sender
     const cachedAdmin = global.adminCache.get(adminKey)
+
     if (cachedAdmin && Date.now() - cachedAdmin.time < 60000) {
       isAdmin = cachedAdmin.admin
       isRAdmin = cachedAdmin.radmin
@@ -147,29 +144,29 @@ export async function handler(chatUpdate) {
     isBotAdmin = botGroup.admin === "admin" || botGroup.admin === "superadmin"
   }
 
-  /* ========= QUOTED ========= */
-  if (m.quoted) {
-    Object.defineProperty(m, "_quoted", {
-      value: smsg(this, m.quoted),
-      enumerable: false
-    })
-  }
-
-  const isCommand = !!m.text
-
   /* ========= PLUGINS ========= */
   for (const name in global.plugins) {
     const plugin = global.plugins[name]
     if (!plugin || plugin.disabled) continue
-    if (!isCommand && !plugin.all) continue
 
     const __filename = join(___dirname, name)
 
-    if (plugin.all) {
+    if (!isCommand && typeof plugin.all !== "function") continue
+
+    if (typeof plugin.all === "function") {
       try {
-        await plugin.all.call(this, m, { chatUpdate, __dirname: ___dirname, __filename, user, chat, settings })
+        await plugin.all.call(this, m, {
+          chatUpdate,
+          __dirname: ___dirname,
+          __filename,
+          user,
+          chat,
+          settings
+        })
       } catch {}
     }
+
+    if (!isCommand) continue
 
     if (!settings.restrict && plugin.tags?.includes("admin")) continue
 
@@ -189,30 +186,6 @@ export async function handler(chatUpdate) {
     }
 
     if (!match) continue
-
-    if (plugin.before) {
-      const stop = await plugin.before.call(this, m, {
-        match,
-        conn: this,
-        participants,
-        groupMetadata,
-        userGroup,
-        botGroup,
-        isROwner,
-        isOwner,
-        isRAdmin,
-        isAdmin,
-        isBotAdmin,
-        isPrems,
-        chatUpdate,
-        __dirname: ___dirname,
-        __filename,
-        user,
-        chat,
-        settings
-      })
-      if (stop) continue
-    }
 
     const usedPrefix = match[0]
     const noPrefix = m.text.slice(usedPrefix.length)
@@ -290,7 +263,6 @@ global.dfail = (type, m, conn) => {
     private: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖲𝖾 𝖯𝗎𝖾𝖽𝖾 𝖮𝖼𝗎𝗉𝖺𝗋 𝖤𝗇 𝖤𝗅 𝖯𝗋𝗂𝗏𝖺𝖽𝗈 𝖣𝖾𝗅 𝖡𝗈𝗍*`,
     admin: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖲𝗈𝗅𝗈 𝖯𝗎𝖾𝖽𝖾 𝖲𝖾𝗋 𝖴𝗌𝖺𝖽𝗈 𝖯𝗈𝗋 𝖠𝖽𝗆𝗂𝗇𝗂𝗌𝗍𝗋𝖺𝖽𝗈𝗋𝖾𝗌*`,
     botAdmin: `*𝖭𝖾𝖼𝖾𝗌𝗂𝗍𝗈 𝗌𝖾𝗋 𝖠𝖽𝗆𝗂𝗇 𝖯𝖺𝗋𝖺 𝖴𝗌𝖺𝗋 𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈*`,
-    unreg: `*𝖭𝗈 𝖤𝗌𝖺𝗌 𝖱𝖾𝗀𝗂𝗌𝗍𝗋𝖺𝖽𝗈, 𝖴𝗌𝖺 .𝗋𝖾𝗀 (𝗇𝖺𝗆𝖾) 19*`,
     restrict: `*𝖤𝗌𝗍𝖾 𝖢𝗈𝗆𝖺𝗇𝖽𝗈 𝖠𝗁 𝖲𝗂𝖽𝗈 𝖣𝖾𝗌𝖺𝖻𝗂𝗅𝗂𝗍𝖺𝖽𝗈 𝖯𝗈𝗋 𝖬𝗂 𝖢𝗋𝖾𝖺𝖽𝗈𝗋*`
   }[type]
 
