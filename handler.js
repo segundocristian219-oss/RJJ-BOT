@@ -8,20 +8,15 @@ import fetch from "node-fetch"
 import ws from "ws"
 
 const strRegex = str => str.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")
-
-const ___dirname = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "plugins"
-)
-
-const delay = ms => new Promise(r => setTimeout(r, ms))
+const ___dirname = path.join(path.dirname(fileURLToPath(import.meta.url)), "plugins")
 
 /* ========= CACHE GLOBAL ========= */
 global.processedMessages ||= new Set()
 global.groupCache ||= new Map()
-global.adminCache ||= new Map()
 global.ownerCache ||= new Set(global.owner.map(v => v.replace(/\D/g, "") + "@lid"))
 global.premsCache ||= new Set(global.prems.map(v => v.replace(/\D/g, "") + "@lid"))
+
+const delay = ms => new Promise(r => setTimeout(r, ms))
 
 export async function handler(chatUpdate) {
   if (!chatUpdate?.messages?.length) return
@@ -35,14 +30,13 @@ export async function handler(chatUpdate) {
   if (!m || m.key?.fromMe) return
 
   const msgId = m.key?.id
-  if (!msgId) return
-  if (global.processedMessages.has(msgId)) return
+  if (!msgId || global.processedMessages.has(msgId)) return
 
   global.processedMessages.add(msgId)
   if (global.processedMessages.size > 5000) global.processedMessages.clear()
   setTimeout(() => global.processedMessages.delete(msgId), 60000)
 
-  if (global.db.data == null) await global.loadDatabase()
+  if (!global.db.data) await global.loadDatabase()
 
   m = smsg(this, m) || m
   if (!m) return
@@ -105,7 +99,7 @@ export async function handler(chatUpdate) {
 
   if (m.isBaileys) return
 
-  /* ========= GRUPOS (MEJORA SPEED) ========= */
+  /* ========= GRUPOS ========= */
   let groupMetadata = {}
   let participants = []
   let isAdmin = false
@@ -116,12 +110,9 @@ export async function handler(chatUpdate) {
 
   if (m.isGroup) {
     const cached = global.groupCache.get(m.chat)
-    const needsGroup =
-      [...Object.values(global.plugins)].some(p => p?.admin || p?.botAdmin || p?.group || p?.detect)
-
     if (cached && Date.now() - cached.time < 60000) {
       groupMetadata = cached.data
-    } else if (needsGroup) {
+    } else {
       groupMetadata = await this.groupMetadata(m.chat)
       global.groupCache.set(m.chat, { data: groupMetadata, time: Date.now() })
       if (global.groupCache.size > 200)
@@ -132,22 +123,11 @@ export async function handler(chatUpdate) {
     userGroup = participants.find(p => p.id === m.sender) || {}
     botGroup = participants.find(p => p.id === this.user.jid) || {}
 
-    // MEJORA SPEED: Cache admins por usuario
-    const adminKey = m.chat + ":" + m.sender
-    const cachedAdmin = global.adminCache.get(adminKey)
-    if (cachedAdmin && Date.now() - cachedAdmin.time < 60000) {
-      isAdmin = cachedAdmin.admin
-      isRAdmin = cachedAdmin.radmin
-    } else {
-      isRAdmin = userGroup.admin === "superadmin" || m.sender === groupMetadata.owner
-      isAdmin = isRAdmin || userGroup.admin === "admin"
-      global.adminCache.set(adminKey, { admin: isAdmin, radmin: isRAdmin, time: Date.now() })
-    }
-
+    isRAdmin = userGroup.admin === "superadmin" || m.sender === groupMetadata.owner
+    isAdmin = isRAdmin || userGroup.admin === "admin"
     isBotAdmin = botGroup.admin === "admin" || botGroup.admin === "superadmin"
   }
 
-  /* ========= QUOTED ========= */
   if (m.quoted) {
     Object.defineProperty(m, "_quoted", {
       value: smsg(this, m.quoted),
