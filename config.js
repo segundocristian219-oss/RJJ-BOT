@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 
 global.owner = [
 '217158512549931', 
-'227045091090524',
+'230008920490230',
 '', 
 ''
 ] 
