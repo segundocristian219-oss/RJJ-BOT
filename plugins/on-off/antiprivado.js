@@ -1,68 +1,13 @@
-let cachedImg
-let cachedFKontak
-
-const safeRegex = /\b(menu|buy|qr|code|p)\b/i
-
-async function getFKontak() {
-  if (cachedFKontak) return cachedFKontak
-
-  if (!cachedImg) {
-    try {
-      const res = await fetch('https://cdn.russellxz.click/28a8569f.jpeg')
-      cachedImg = Buffer.from(await res.arrayBuffer())
-    } catch {
-      cachedImg = Buffer.alloc(0)
-    }
+export async function before(m, {conn, isAdmin, isBotAdmin, isOwner, isROwner}) {
+  if (m.isBaileys && m.fromMe) return !0;
+  if (m.isGroup) return !1;
+  if (!m.message) return !0;
+  if (m.text.includes('PIEDRA') || m.text.includes('PAPEL') || m.text.includes('TIJERA') || m.text.includes('serbot') || m.text.includes('jadibot')) return !0;
+  const chat = global.db.data.chats[m.chat];
+  const bot = global.db.data.settings[this.user.jid] || {};
+  if (bot.antiPrivate && !isOwner && !isROwner) {
+    await m.reply(`> "⭐ Hola @${m.sender.split`@`[0]}, Lo Siento No Esta 📌Permitido Escribirme Al Privado ⚠️ Por Lo Cual Seras Bloqueado/A\n\n> *⭐Puedes Comunicarte con mi Creador para adquirir\n\n\n 𝑪𝒓𝒊𝒔𝒕𝒊𝒂𝒏: wa.me/5215561076182`, false, {mentions: [m.sender]});
+    await this.updateBlockStatus(m.chat, 'block');
   }
-
-  cachedFKontak = {
-    key: {
-      fromMe: false,
-      participant: '0@s.whatsapp.net'
-    },
-    message: {
-      productMessage: {
-        product: {
-          productImage: { jpegThumbnail: cachedImg },
-          title: 'texto',
-          description: '𝗗𝗘𝗧𝗘𝗡𝗧𝗘 𝗔𝗩𝗜𝗦𝗢',
-          currencyCode: 'USD',
-          priceAmount1000: '5000',
-          retailerId: 'BOT'
-        },
-        businessOwnerJid: '0@s.whatsapp.net'
-      }
-    }
-  }
-
-  return cachedFKontak
-}
-
-export async function before(m, { conn, isOwner, isROwner }) {
-  if (!m.message) return true
-  if (m.isBaileys || m.fromMe) return true
-  if (m.isGroup) return false
-  if (!m.text) return true
-  if (safeRegex.test(m.text)) return true
-
-  const chat = global.db.data.chats[m.chat]
-  const bot = global.db.data.settings[conn.user.jid] || {}
-
-  if (!bot.antiPrivate) return false
-  if (isOwner || isROwner) return false
-
-  const fkontak = await getFKontak()
-
-  await conn.reply(
-    m.chat,
-    `⚠️ Hola @${m.sender.split('@')[0]}
-
-Los comandos no funcionan en *privado*.
-Serás *bloqueado automáticamente*.`,
-    fkontak,
-    { mentions: [m.sender] }
-  )
-
-  await conn.updateBlockStatus(m.chat, 'block')
-  return false
+  return !1;
 }
