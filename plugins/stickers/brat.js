@@ -1,51 +1,38 @@
-const handler = async (m, { conn, text }) => {
-  if (!text && m.quoted?.text) text = m.quoted.text;
+const handler = async (m, { conn }) => {
+  const body = m.text?.trim()
+  if (!body) return
 
+  if (!/^brat|.brat\s+/i.test(body)) return
+
+  const text = body.replace(/^(brat|.brat)\s+/i, "").trim()
   if (!text) {
-    return conn.sendMessage(
-      m.chat,
-      {
-        text: "𝖠𝗀𝗋𝖾𝗀𝖺 𝖳𝖾𝗑𝗍𝗈 𝖮 𝖱𝖾𝗌𝗉𝗈𝗇𝖽𝖾 𝖠 𝖴𝗇 𝖬𝖾𝗇𝗌𝖺𝗃𝖾 𝖯𝖺𝗋𝖺 𝖢𝗋𝖾𝖺𝗋 𝖤𝗅 𝖲𝗍𝗂𝖼𝗄𝖾𝗋 𝖡𝗋𝖺𝗍",
-        ...global.rcanal
-      },
-      { quoted: m }
-    );
+    return m.reply(`☁️ 𝘼𝙂𝙍𝙀𝙂𝘼 𝙏𝙀𝙓𝙏𝙊 𝙋𝘼𝙍𝘼 𝙂𝙀𝙉𝙀𝙍𝘼𝙍 𝙀𝙇 𝙎𝙏𝙄𝘾𝙆𝙀𝙍\n\nEjemplo: brat angelito`)
   }
 
   try {
-    await conn.sendMessage(m.chat, { react: { text: "🕒", key: m.key } });
+    // reacción ⌛
+    await conn.sendMessage(m.chat, { react: { text: "⌛", key: m.key } })
 
-        const url = `https://api.siputzx.my.id/api/m/brat?text=${encodeURIComponent(text)}`
+    const url = `https://api.siputzx.my.id/api/m/brat?text=${encodeURIComponent(text)}`
+    await conn.sendMessage(m.chat, {
+      sticker: { url },
+      packname: "AngelBot",
+      author: "AngelBot",
+    }, { quoted: m })
 
-    await conn.sendMessage(
-      m.chat,
-      {
-        sticker: { url },
-        packname: "",
-        author: "",
-        ...global.rcanal
-      },
-      { quoted: m }
-    );
-
-    await conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } });
-
+    // reacción ✅
+    await conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } })
   } catch (e) {
-    console.error(e);
-    await conn.sendMessage(m.chat, { react: { text: "❌", key: m.key } });
-
-    return conn.sendMessage(
-      m.chat,
-      {
-        text: "𝖮𝖼𝗎𝗋𝗋𝗂𝗈 𝖴𝗇 𝖤𝗋𝗋𝗈𝗋 𝖠𝗅 𝖦𝖾𝗇𝖾𝗋𝖺𝗋 𝖤𝗅 𝖲𝗍𝗂𝖼𝗄𝖾𝗋",
-        ...global.rcanal
-      },
-      { quoted: m }
-    );
+    console.error(e)
+    await conn.sendMessage(m.chat, { react: { text: "❌", key: m.key } })
+    conn.reply(m.chat, '❌ 𝙀𝙍𝙍𝙊𝙍 𝘼𝙇 𝙂𝙀𝙉𝙀𝙍𝘼𝙍 𝙀𝙇 𝙎𝙏𝙄𝘾𝙆𝙀𝙍', m)
   }
-};
+}
 
-handler.help = ["𝖡𝗋𝖺𝗍 <𝖳𝖾𝗑𝗍𝗈>"]
-handler.tags = ["𝖲𝖳𝖨𝖢𝖪𝖤𝖱𝖲"]
-handler.command = /^brat$/i;
-export default handler;
+// igual que play: brat <texto> o .brat <texto>
+handler.customPrefix = /^(brat|.brat)\s+/i
+handler.command = new RegExp
+handler.help = ["brat <texto>"]
+handler.tags = ["sticker"]
+
+export default handler
