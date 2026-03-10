@@ -145,7 +145,7 @@ const handler = async (m, { conn }) => {
   await conn.sendMessage(
     m.chat,
     {
-      video: { url: "https://files.catbox.moe/q6mtew.mp4" },
+      video: { url: "https://files.catbox.moe/qik0ad.mp4" },
       caption: menu,
       gifPlayback: true,
       mentions: [m.sender]
