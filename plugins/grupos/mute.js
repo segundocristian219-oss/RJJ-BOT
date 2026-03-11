@@ -106,8 +106,7 @@ handler.all = async (m) => {
 handler.help = ['mute @usuario', 'unmute @usuario']
 handler.tags = ['GRUPOS']
 handler.command = ['mute', 'unmute']
-
+handler.group = true
 handler.admin = true
-
 
 export default handler
