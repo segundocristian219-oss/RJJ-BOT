@@ -108,6 +108,6 @@ handler.tags = ['GRUPOS']
 handler.command = ['mute', 'unmute']
 handler.group = true
 handler.admin = true
-handler. = true
+handler.bot admin = true
 
 export default handler
