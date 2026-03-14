@@ -1,92 +1,131 @@
-import axios from "axios";
-import fs from "fs";
-import path from "path";
+import axios from "axios"
 
-const handler = async (msg, { conn, args, command }) => {
-  const chatId = msg.key.remoteJid;
-  const text = args.join(" ");
-  const pref = global.prefixes?.[0] || ".";
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
 
-  if (!text) {
-    return conn.sendMessage(chatId, {
-      text: `🔗 *𝙸𝚗𝚐𝚛𝚎𝚜𝚊 𝚞𝚗 𝙴𝚗𝚕𝚊𝚌𝚎 𝚍𝚎 𝚃𝚒𝚔𝚃𝚘𝚔*`
-    }, { quoted: msg });
+const AXIOS_CFG = {
+  timeout: 20000,
+  headers: {
+    "User-Agent": UA,
+    "Accept": "*/*",
+    "Referer": "https://www.tiktok.com/",
+    "Origin": "https://www.tiktok.com"
+  }
+}
+
+async function retry(fn, times = 3) {
+  let lastErr
+  for (let i = 0; i < times; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr
+}
+
+async function getTikTokVideo(url) {
+  const providers = [
+    async () => {
+      const r = await axios.get(
+        `https://api.dorratz.com/v2/tiktok-dl?url=${encodeURIComponent(url)}`,
+        AXIOS_CFG
+      )
+      return r.data?.data?.media?.org || null
+    },
+
+    async () => {
+      const r = await axios.get(
+        `https://tikwm.com/api/?url=${encodeURIComponent(url)}`,
+        AXIOS_CFG
+      )
+      return r.data?.data?.play || null
+    }
+  ]
+
+  for (const fn of providers) {
+    try {
+      const video = await retry(fn, 2)
+      if (video) return video
+    } catch {}
   }
 
-  if (!/^https?:\/\//.test(args[0]) || !args[0].includes("tiktok")) {
-    return conn.sendMessage(chatId, {
-      text: "🚩 *𝙴𝚗𝚕𝚊𝚌𝚎 𝙸𝚗𝚟𝚊𝚕𝚒𝚍𝚘*"
-    }, { quoted: msg });
-  }
+  return null
+}
+
+const handler = async (msg, { conn, args }) => {
+  const chatId = msg.key.remoteJid
+  const url = args[0]
+
+  if (!url)
+    return conn.sendMessage(
+      chatId,
+      { text: "🔗 *Ingresa un enlace de TikTok*" },
+      { quoted: msg }
+    )
+
+  if (!/^https?:\/\//i.test(url) || !/tiktok\.com/i.test(url))
+    return conn.sendMessage(
+      chatId,
+      { text: "🚩 *Enlace inválido*" },
+      { quoted: msg }
+    )
 
   try {
     await conn.sendMessage(chatId, {
       react: { text: "🕒", key: msg.key }
-    });
+    })
 
-    const response = await axios.get(`https://api.dorratz.com/v2/tiktok-dl?url=${args[0]}`);
-    const data = response.data?.data;
+    const videoUrl = await getTikTokVideo(url)
 
-    if (!data || !data.media?.org) {
-      throw new Error("La API no devolvió un video válido.");
-    }
+    if (!videoUrl)
+      return conn.sendMessage(
+        chatId,
+        { text: "❌ *No se pudo obtener el video*" },
+        { quoted: msg }
+      )
 
-    const videoUrl = data.media.org;
-    const videoTitle = data.title || "Sin título";
-    const videoAuthor = data.author?.nickname || "Desconocido";
-    const videoDuration = data.duration ? `${data.duration} segundos` : "No especificado";
-    const videoLikes = data.like || "0";
-    const videoComments = data.comment || "0";
+    const res = await axios.get(videoUrl, {
+      ...AXIOS_CFG,
+      responseType: "arraybuffer"
+    })
 
-    const tmpDir = path.resolve("./tmp");
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
+    const sizeMB = res.data.byteLength / (1024 * 1024)
+    if (sizeMB > 99)
+      return conn.sendMessage(
+        chatId,
+        { text: `⚠️ *El video pesa ${sizeMB.toFixed(2)}MB*` },
+        { quoted: msg }
+      )
 
-    const filePath = path.join(tmpDir, `tt-${Date.now()}.mp4`);
-    const videoRes = await axios.get(videoUrl, { responseType: "stream" });
-    const writer = fs.createWriteStream(filePath);
-
-    await new Promise((resolve, reject) => {
-      videoRes.data.pipe(writer);
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-
-    const stats = fs.statSync(filePath);
-    const sizeMB = stats.size / (1024 * 1024);
-    if (sizeMB > 99) {
-      fs.unlinkSync(filePath);
-      return conn.sendMessage(chatId, {
-        text: `❌ El archivo pesa ${sizeMB.toFixed(2)}MB y excede el límite de 99MB.`
-      }, { quoted: msg });
-    }
-
-    const caption = ``;
-
-    await conn.sendMessage(chatId, {
-      video: fs.readFileSync(filePath),
-      mimetype: "video/mp4",
-      caption
-    }, { quoted: msg });
-
-    fs.unlinkSync(filePath);
+    await conn.sendMessage(
+      chatId,
+      {
+        video: Buffer.from(res.data),
+        mimetype: "video/mp4"
+      },
+      { quoted: msg }
+    )
 
     await conn.sendMessage(chatId, {
       react: { text: "✅", key: msg.key }
-    });
-
-  } catch (error) {
-    console.error("❌ Error en el comando TikTok:", error);
-    await conn.sendMessage(chatId, {
-      text: "❌ *Ocurrió un error al procesar el enlace de TikTok.*"
-    }, { quoted: msg });
-
+    })
+  } catch (err) {
+    console.error("TT ERROR:", err)
+    await conn.sendMessage(
+      chatId,
+      { text: "❌ *Error al procesar el video de TikTok*" },
+      { quoted: msg }
+    )
     await conn.sendMessage(chatId, {
       react: { text: "❌", key: msg.key }
-    });
+    })
   }
-};
+}
 
-handler.help = ["𝖳𝗂𝗄𝗍𝗈𝗄 <𝗎𝗋𝗅>"]
-handler.tags = ["𝖣𝖤𝖲𝖢𝖠𝖱𝖦𝖠𝖲"]
-handler.command = ["tiktok", "tt"];
-export default handler;
+handler.command = ["tiktok", "tt"]
+handler.help = ["tiktok <url>"]
+handler.tags = ["descargas"]
+
+export default handler
