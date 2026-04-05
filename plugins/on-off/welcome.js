@@ -7,7 +7,7 @@ async function getProfilePic(conn, jid) {
   const cached = ppCache.get(jid)
   if (cached && Date.now() - cached.time < CACHE_TTL) return cached.url
 
-  let url = 'https://cdn.russellxz.click/262f94ad.jpeg'
+  let url = 'https://files.catbox.moe/owfsz5.jpg'
   try {
     url = await conn.profilePictureUrl(jid, 'image')
   } catch {
